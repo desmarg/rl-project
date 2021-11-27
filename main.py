@@ -1,16 +1,29 @@
-# This is a sample Python script.
+import argparse
 
-# Press Shift+F10 to execute it or replace it with your code.
-# Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
-
-
-def print_hi(name):
-    # Use a breakpoint in the code line below to debug your script.
-    print(f'Hi, {name}')  # Press Ctrl+F8 to toggle the breakpoint.
+import rlcard
+from rlcard.agents import RandomAgent
+from rlcard.utils import set_seed
 
 
-# Press the green button in the gutter to run the script.
+def run(args):
+    env = rlcard.make(args["env"], config={"seed": 42})
+    num_episodes = 1
+
+    set_seed(42)
+
+    agent = RandomAgent(num_actions=env.num_actions)
+    env.set_agents([agent for _ in range(env.num_players)])
+
+    for episode in range(num_episodes):
+
+        trajectories, player_wins = env.run(is_training=False)
+        print("\nEpisode {}".format(episode))
+        print(trajectories)
+
+
 if __name__ == '__main__':
-    print_hi('PyCharm')
+    args = {
+        "env": "leduc-holdem"
+    }
 
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
+    run(args)
