@@ -3,21 +3,28 @@ import numpy as np
 
 class SarsaAgent(object):
 
-    def __init__(self, num_actions):
+    def __init__(self, num_actions, state_shape, alpha, lamda, discount, device):
         self.use_raw = False
         self.num_actions = num_actions
+        self.theta = np.zeros(state_shape)
+        self.alpha = alpha
+        self.discount = discount
+        self.lamda = lamda
+
+    def Q(self):
+        value = sum(self.theta)
+        return value
+
+    def choose_action(self, state, theta, n_actions, tile_coder):
+        return np.argmax([self.Q(tile_coder.phi(state, action), theta) for action in range(n_actions)])
+
+    def feed(self, trajectories):
+
+        (state, action, reward, next_state, done) = tuple(trajectories)
 
     @staticmethod
     def step(state):
-        ''' Predict the action given the curent state in gerenerating training data.
-        Args:
-            state (dict): An dictionary that represents the current state
-        Returns:
-            action (int): The action predicted (randomly chosen) by the random agent
-        '''
 
-        # mettre le code de selection d'action ici
-        # algo SARSA par exemple
         return np.random.choice(list(state['legal_actions'].keys()))
 
     def eval_step(self, state):
