@@ -35,10 +35,7 @@ def train(args):
     elif args.algorithm == 'sarsa':
         from sarsa_agent import SarsaAgent
         agent = SarsaAgent(num_actions=env.num_actions,
-                          state_shape=env.state_shape[0],
-                          hidden_layers_sizes=[64, 64],
-                          q_mlp_layers=[64, 64],
-                          device=device)
+                           state_dim=env.state_shape[0], alpha=0.1, lamda=0.9, discount=1, device=device)
     agents = [agent]
     for _ in range(env.num_players):
         agents.append(RandomAgent(num_actions=env.num_actions))
@@ -79,7 +76,7 @@ def train(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser("DQN example in RLCard")
     parser.add_argument('--env', type=str, default='leduc-holdem')
-    parser.add_argument('--algorithm', type=str, default='dqn', choices=['dqn', 'nfsp'])
+    parser.add_argument('--algorithm', type=str, default='dqn', choices=['dqn', 'nfsp', 'sarsa'])
     parser.add_argument('--cuda', type=str, default='')
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--num_episodes', type=int, default=5000)
