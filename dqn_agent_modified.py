@@ -34,10 +34,14 @@ from copy import deepcopy
 
 from rlcard.utils.utils import remove_illegal
 
-Transition = namedtuple('Transition', ['state', 'action', 'reward', 'next_state', 'next_action', 'legal_actions', 'done'])
+Transition = namedtuple('Transition', ['state', 'action', 'reward', 'next_state', 'legal_actions', 'done'])
 
 
-class SarsaAgent(object):
+class DQNAgentModified(object):
+    '''
+    Approximate clone of rlcard.agents.dqn_agent.DQNAgent
+    that depends on PyTorch instead of Tensorflow
+    '''
 
     def __init__(self,
                  replay_memory_size=20000,
@@ -120,8 +124,8 @@ class SarsaAgent(object):
         Args:
             ts (list): a list of 5 elements that represent the transition
         '''
-        (state, action, reward, next_state, next_action, done) = tuple(ts)
-        self.feed_memory(state['obs'], action, reward, next_state['obs'], next_action, list(state['legal_actions'].keys()), done)
+        (state, action, reward, next_state, done) = tuple(ts)
+        self.feed_memory(state['obs'], action, reward, next_state['obs'], list(state['legal_actions'].keys()), done)
         self.total_t += 1
         tmp = self.total_t - self.replay_memory_init_size
         if tmp >= 0 and tmp % self.train_every == 0:
@@ -189,31 +193,22 @@ class SarsaAgent(object):
         Returns:
             loss (float): The loss of the current batch.
         '''
-        state_batch, action_batch, reward_batch, next_state_batch, next_action_batch, legal_actions_batch, done_batch = self.memory.sample()
+        state_batch, action_batch, reward_batch, next_state_batch, legal_actions_batch, done_batch = self.memory.sample()
 
         # Calculate best next actions using Q-network (Double DQN)
-        # q_values_next = self.q_estimator.predict_nograd(next_state_batch)
-        #
-        # qsa_next = []
-        # for q_vals, next_action_index in zip(q_values_next, next_action_batch):
-        #     qsa_next.append(q_vals[next_action_index])
-        #
-        # best_actions = np.array(qsa_next)
-
-
-        # legal_actions = []
-        # for b in range(self.batch_size):
-        #     legal_actions.extend([i + b * self.num_actions for i in legal_actions_batch[b]])
-        # masked_q_values = -np.inf * np.ones(self.num_actions * self.batch_size, dtype=float)
-        # masked_q_values[legal_actions] = q_values_next.flatten()[legal_actions]
-        # masked_q_values = masked_q_values.reshape((self.batch_size, self.num_actions))
-        # best_actions = np.argmax(masked_q_values, axis=1)
-
+        q_values_next = self.q_estimator.predict_nograd(next_state_batch)
+        legal_actions = []
+        for b in range(self.batch_size):
+            legal_actions.extend([i + b * self.num_actions for i in legal_actions_batch[b]])
+        masked_q_values = -np.inf * np.ones(self.num_actions * self.batch_size, dtype=float)
+        masked_q_values[legal_actions] = q_values_next.flatten()[legal_actions]
+        masked_q_values = masked_q_values.reshape((self.batch_size, self.num_actions))
+        best_actions = np.argmax(masked_q_values, axis=1)
 
         # Evaluate best next actions using Target-network (Double DQN)
         q_values_next_target = self.target_estimator.predict_nograd(next_state_batch)
         target_batch = reward_batch + np.invert(done_batch).astype(np.float32) * \
-                       self.discount_factor * q_values_next_target[np.arange(self.batch_size), next_action_batch]
+                       self.discount_factor * q_values_next_target[np.arange(self.batch_size), best_actions]
 
         # Perform gradient descent update
         state_batch = np.array(state_batch)
@@ -228,7 +223,7 @@ class SarsaAgent(object):
 
         self.train_t += 1
 
-    def feed_memory(self, state, action, reward, next_state, next_action, legal_actions, done):
+    def feed_memory(self, state, action, reward, next_state, legal_actions, done):
         ''' Feed transition to memory
 
         Args:
@@ -239,7 +234,7 @@ class SarsaAgent(object):
             legal_actions (list): the legal actions of the next state
             done (boolean): whether the episode is finished
         '''
-        self.memory.save(state, action, reward, next_state, next_action, legal_actions, done)
+        self.memory.save(state, action, reward, next_state, legal_actions, done)
 
     def set_device(self, device):
         self.device = device
@@ -369,7 +364,7 @@ class EstimatorNetwork(nn.Module):
         fc.append(nn.BatchNorm1d(layer_dims[0]))
         for i in range(len(layer_dims) - 1):
             fc.append(nn.Linear(layer_dims[i], layer_dims[i + 1], bias=True))
-            fc.append(nn.Tanh())
+            fc.append(nn.ReLU())
         fc.append(nn.Linear(layer_dims[-1], self.num_actions, bias=True))
         self.fc_layers = nn.Sequential(*fc)
 
@@ -395,7 +390,7 @@ class Memory(object):
         self.batch_size = batch_size
         self.memory = []
 
-    def save(self, state, action, reward, next_state, next_action, legal_actions, done):
+    def save(self, state, action, reward, next_state, legal_actions, done):
         ''' Save transition into memory
 
         Args:
@@ -408,7 +403,7 @@ class Memory(object):
         '''
         if len(self.memory) == self.memory_size:
             self.memory.pop(0)
-        transition = Transition(state, action, reward, next_state, next_action, legal_actions, done)
+        transition = Transition(state, action, reward, next_state, legal_actions, done)
         self.memory.append(transition)
 
     def sample(self):

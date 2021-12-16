@@ -23,16 +23,17 @@ def train(args):
 
     # Initialize the agent and use random agents as opponents
     if args.algorithm == 'dqn':
-        # from dqn_agent_modified import DQNAgentModified
-        # agent = DQNAgentModified(num_actions=env.num_actions,
-        #                          state_shape=env.state_shape[0],
-        #                          mlp_layers=[64, 128, 64],
-        #                          device=device)
+        from dqn_agent_modified import DQNAgentModified
+        agent = DQNAgentModified(num_actions=env.num_actions,
+                                 state_shape=env.state_shape[0],
+                                 mlp_layers=[64, 128, 64],
+                                 device=device)
         from rlcard.agents import DQNAgent
-        agent = DQNAgent(num_actions=env.num_actions,
+        competitor = DQNAgent(num_actions=env.num_actions,
                                  state_shape=env.state_shape[0],
                                  mlp_layers=[64, 64],
                                  device=device)
+        # competitor = RandomAgent(num_actions=env.num_actions)
     elif args.algorithm == 'nfsp':
         from rlcard.agents import NFSPAgent
         agent = NFSPAgent(num_actions=env.num_actions,
@@ -43,12 +44,7 @@ def train(args):
     elif args.algorithm == 'sarsa':
         from sarsa_agent import SarsaAgent
         agent = SarsaAgent(num_actions=env.num_actions,
-                                 state_shape=env.state_shape[0],
-                                 mlp_layers=[64, 64],
-                                 device=device)
-
-    competitor = RandomAgent(num_actions=env.num_actions)
-
+                           state_dim=env.state_shape[0], alpha=0.1, lamda=0.9, discount=1, device=device)
     agents = [agent, competitor]
     # for _ in range(env.num_players):
     #     agents.append(RandomAgent(num_actions=env.num_actions))
@@ -71,16 +67,14 @@ def train(args):
             # Reorganaize the data to be state, action, reward, next_state, done
             trajectories = reorganize(trajectories, payoffs)
 
-
-
             # Feed transitions into agent memory, and train the agent
             # Here, we assume that DQN always plays the first position
             # and the other players play randomly (if any)
             for ts in trajectories[0]:
-                (state, action, reward, next_state, done) = ts
-                next_action = agent.step(next_state)
-                ts = (state, action, reward, next_state, next_action, done)
                 agent.feed(ts)
+
+            for ts in trajectories[1]:
+                competitor.feed(ts)
 
             # Evaluate the performance. Play with random agents.
             if episode % args.evaluate_every == 0:
@@ -99,13 +93,13 @@ def train(args):
         #     for element in rewards:
         #         file.write(element + "\n")
 
-        plt.plot(episodes, rewards, label="Sarsa Agent", linewidth=0.6)
-        plt.plot(episodes, np.multiply(-1, np.array(rewards)), label="Random Agent", linewidth=0.6)
+        plt.plot(episodes, rewards, label="DQN Agent with custom architecture", linewidth=0.6)
+        plt.plot(episodes, np.multiply(-1, np.array(rewards)), label="Baseline DQN Agent", linewidth=0.6)
 
         plt.xlabel("Episode number")
         plt.ylabel("Average payoff (reward) over 2000 games")
         plt.legend()
-        plt.title("Sarsa Agent vs. Random Agent")
+        plt.title("Modified DQN Agent vs. Baseline DQN Agent")
         plt.show()
 
     # Save model
@@ -117,7 +111,7 @@ def train(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser("DQN example in RLCard")
     parser.add_argument('--env', type=str, default='leduc-holdem')
-    parser.add_argument('--algorithm', type=str, default='sarsa', choices=['dqn', 'nfsp', 'sarsa'])
+    parser.add_argument('--algorithm', type=str, default='dqn', choices=['dqn', 'nfsp', 'sarsa'])
     parser.add_argument('--cuda', type=str, default='')
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--num_episodes', type=int, default=5000)
